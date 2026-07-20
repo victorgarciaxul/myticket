@@ -24,7 +24,13 @@ export async function POST(request: NextRequest) {
     const mimeType = file.type as 'image/jpeg' | 'image/png' | 'image/webp'
 
     const response = await getGroq().chat.completions.create({
-      model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+      // Único modelo con visión disponible en esta cuenta de Groq
+      // (meta-llama/llama-4-scout-17b-16e-instruct fue retirado).
+      // Es un modelo "razonador": sin reasoning_effort:'none' antepone un
+      // bloque <think>...</think> larguísimo que agota max_tokens antes de
+      // llegar a responder.
+      model: 'qwen/qwen3.6-27b',
+      reasoning_effort: 'none',
       max_tokens: 512,
       messages: [
         {
@@ -59,8 +65,10 @@ Omite un campo si no lo ves con claridad. Nunca inventes datos.`,
       ],
     })
 
-    const text = response.choices[0]?.message?.content ?? ''
-    console.log('Groq raw response:', text)
+    const rawText = response.choices[0]?.message?.content ?? ''
+    console.log('Groq raw response:', rawText)
+    // Por si acaso el modelo antepone razonamiento pese a reasoning_effort:'none'
+    const text = rawText.replace(/<think>[\s\S]*?<\/think>/i, '')
 
     const match = text.match(/\{[\s\S]*?\}/)
     if (match) {

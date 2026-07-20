@@ -37,7 +37,9 @@ function NewExpenseForm() {
   const [transportType, setTransportType] = useState<ExpenseType | null>(null)
   const [showTransportMenu, setShowTransportMenu] = useState(false)
 
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0])
+  const todayISO = new Date().toISOString().split('T')[0]
+  const [date, setDate] = useState(todayISO)
+  const [dateTouched, setDateTouched] = useState(false)
   const [amount, setAmount] = useState('')
   const [description, setDescription] = useState('')
   const [projectTag, setProjectTag] = useState('')
@@ -72,7 +74,7 @@ function NewExpenseForm() {
           if (res.ok) {
             const data = await res.json()
             setReceipts(prev => prev.map(r => r.file === file ? { ...r, aiData: data, loading: false } : r))
-            if (data.date && !date) setDate(data.date)
+            if (data.date && !dateTouched) setDate(data.date)
             if (data.amount && !amount) setAmount(String(data.amount))
             if (data.establishment && !description) setDescription(data.establishment)
           }
@@ -251,7 +253,7 @@ function NewExpenseForm() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Fecha <span className="text-red-400">*</span></label>
-              <input type="date" value={date} onChange={e => setDate(e.target.value)} required className={INPUT} />
+              <input type="date" value={date} onChange={e => { setDate(e.target.value); setDateTouched(true) }} required className={INPUT} />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1.5">
