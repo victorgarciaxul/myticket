@@ -4,15 +4,12 @@ import { usePathname, useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { Profile } from '@/types'
-import { LayoutDashboard, FolderOpen, LogOut, Ticket, ChevronRight, UserCircle, ShieldCheck } from 'lucide-react'
-import { redirectToAppCenterHome } from '@/lib/appcenter'
+import { LayoutDashboard, FolderOpen, Ticket, ChevronRight, UserCircle, ShieldCheck } from 'lucide-react'
 
 interface SidebarProps { profile: Profile }
 
 export function Sidebar({ profile }: SidebarProps) {
   const pathname = usePathname()
-  const router = useRouter()
-  const supabase = createClient()
   const isAdmin = profile.role === 'admin'
 
   const navItems = isAdmin
@@ -25,11 +22,6 @@ export function Sidebar({ profile }: SidebarProps) {
         { href: '/projects', label: 'Mis proyectos', icon: FolderOpen },
         { href: '/account', label: 'Mi cuenta', icon: UserCircle },
       ]
-
-  async function handleSignOut() {
-    await supabase.auth.signOut()
-    redirectToAppCenterHome()
-  }
 
   return (
     <aside className="w-60 min-h-screen bg-white border-r border-gray-100 flex flex-col">
@@ -69,7 +61,7 @@ export function Sidebar({ profile }: SidebarProps) {
 
       {/* Footer */}
       <div className="px-3 py-4 border-t border-gray-100">
-        <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg mb-1">
+        <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg">
           <div className="w-7 h-7 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
             {profile.full_name?.[0]?.toUpperCase()}
           </div>
@@ -78,11 +70,6 @@ export function Sidebar({ profile }: SidebarProps) {
             <p className="text-[10px] text-gray-400">{profile.role === 'admin' ? 'Administrador' : 'Usuario'}</p>
           </div>
         </div>
-        <button onClick={handleSignOut}
-          className="flex items-center gap-2.5 px-3 py-2 w-full rounded-lg text-sm text-gray-500 hover:bg-red-50 hover:text-red-600 transition-colors group">
-          <LogOut className="h-4 w-4 text-gray-400 group-hover:text-red-500" />
-          Cerrar sesión
-        </button>
       </div>
     </aside>
   )
