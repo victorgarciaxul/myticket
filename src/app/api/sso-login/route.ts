@@ -1,14 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
 const ADMIN_EMAILS = ['admin@xul.es']
 
-// Cliente admin: usa la secret key, SOLO en servidor, nunca expuesto al navegador
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SECRET_KEY!,
-  { auth: { autoRefreshToken: false, persistSession: false } }
-)
+// Cliente admin: usa la secret key, SOLO en servidor, nunca expuesto al navegador.
+// Perezoso: instanciarlo al cargar el módulo rompe el build (Next evalúa las
+// rutas al recolectar page data, cuando aún no hay variables de entorno).
+let _supabaseAdmin: SupabaseClient | null = null
+function getSupabaseAdmin(): SupabaseClient {
+  if (!_supabaseAdmin) {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const key = process.env.SUPABASE_SECRET_KEY
+    if (!url || !key) {
+      throw new Error('Faltan NEXT_PUBLIC_SUPABASE_URL o SUPABASE_SECRET_KEY')
+    }
+    _supabaseAdmin = createClient(url, key, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+  }
+  return _supabaseAdmin
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -38,7 +49,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 2) Buscar (o crear) el perfil correspondiente en MyTicket, usando el email ya verificado
-    let { data: profile } = await supabaseAdmin
+    let { data: profile } = await getSupabaseAdmin()
       .from('profiles')
       .select('id')
       .eq('email', email)
@@ -50,7 +61,7 @@ export async function POST(req: NextRequest) {
       userId = profile.id
     } else {
       // Provisión automática: nuevo usuario verificado por AppCenter, rol por defecto = user
-      const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
+      const { data: created, error: createErr } = await getSupabaseAdmin().auth.admin.createUser({
         email,
         email_confirm: true,
         user_metadata: { full_name: email.split('@')[0] },
@@ -62,12 +73,12 @@ export async function POST(req: NextRequest) {
       // El trigger handle_new_user crea la fila en profiles con role='user' por defecto.
       // Si el email está en la lista de admins conocidos, se ajusta el rol.
       if (ADMIN_EMAILS.includes(email)) {
-        await supabaseAdmin.from('profiles').update({ role: 'admin' }).eq('id', userId)
+        await getSupabaseAdmin().from('profiles').update({ role: 'admin' }).eq('id', userId)
       }
     }
 
     // 3) Generar un enlace mágico y canjearlo server-side para obtener tokens de sesión reales
-    const { data: linkData, error: linkErr } = await supabaseAdmin.auth.admin.generateLink({
+    const { data: linkData, error: linkErr } = await getSupabaseAdmin().auth.admin.generateLink({
       type: 'magiclink',
       email,
     })
@@ -80,7 +91,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Respuesta inesperada al generar sesión' }, { status: 500 })
     }
 
-    const { data: sessionData, error: sessionErr } = await supabaseAdmin.auth.verifyOtp({
+    const { data: sessionData, error: sessionErr } = await getSupabaseAdmin().auth.verifyOtp({
       type: 'magiclink',
       token_hash: hashedToken,
     })
