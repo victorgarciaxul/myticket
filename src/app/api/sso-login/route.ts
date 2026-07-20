@@ -49,11 +49,21 @@ export async function POST(req: NextRequest) {
     }
 
     // 2) Buscar (o crear) el perfil correspondiente en MyTicket, usando el email ya verificado
-    let { data: profile } = await getSupabaseAdmin()
+    const { data: profile, error: profileErr } = await getSupabaseAdmin()
       .from('profiles')
       .select('id')
       .eq('email', email)
       .maybeSingle()
+
+    // No seguir a ciegas si la consulta falla (credenciales/URL mal configuradas
+    // en Vercel, por ejemplo): antes esto se ignoraba y acababa intentando crear
+    // un usuario que ya existía, con un error genérico imposible de depurar.
+    if (profileErr) {
+      return NextResponse.json(
+        { error: `No se pudo consultar el perfil: ${profileErr.message}` },
+        { status: 500 }
+      )
+    }
 
     let userId: string
 
@@ -66,12 +76,46 @@ export async function POST(req: NextRequest) {
         email_confirm: true,
         user_metadata: { full_name: email.split('@')[0] },
       })
+
       if (createErr || !created.user) {
-        return NextResponse.json({ error: 'No se pudo crear el usuario' }, { status: 500 })
+        // Caso de auto-reparación: el usuario ya existe en auth (p.ej. de una
+        // prueba anterior) pero le faltaba la fila en profiles. En vez de
+        // fallar, la buscamos y la creamos ahora.
+        const alreadyRegistered = createErr?.message?.toLowerCase().includes('already been registered')
+          || createErr?.message?.toLowerCase().includes('already registered')
+        if (!alreadyRegistered) {
+          return NextResponse.json(
+            { error: `No se pudo crear el usuario: ${createErr?.message ?? 'error desconocido'}` },
+            { status: 500 }
+          )
+        }
+
+        const { data: existing, error: listErr } = await getSupabaseAdmin().auth.admin.listUsers()
+        const existingUser = existing?.users?.find((u) => u.email?.toLowerCase() === email.toLowerCase())
+        if (listErr || !existingUser) {
+          return NextResponse.json(
+            { error: 'El usuario ya existe pero no se pudo localizar para reparar su perfil' },
+            { status: 500 }
+          )
+        }
+        userId = existingUser.id
+      } else {
+        userId = created.user.id
       }
-      userId = created.user.id
-      // El trigger handle_new_user crea la fila en profiles con role='user' por defecto.
-      // Si el email está en la lista de admins conocidos, se ajusta el rol.
+
+      // Asegurar que existe la fila en profiles (el trigger handle_new_user la crea
+      // para altas nuevas, pero en el caso de auto-reparación puede no existir).
+      await getSupabaseAdmin().from('profiles').upsert(
+        {
+          id: userId,
+          email,
+          full_name: email.split('@')[0],
+          role: ADMIN_EMAILS.includes(email) ? 'admin' : 'user',
+        },
+        { onConflict: 'id', ignoreDuplicates: true }
+      )
+      // Si el email está en la lista de admins conocidos, se ajusta el rol
+      // (por si la fila ya existía con role='user').
       if (ADMIN_EMAILS.includes(email)) {
         await getSupabaseAdmin().from('profiles').update({ role: 'admin' }).eq('id', userId)
       }
