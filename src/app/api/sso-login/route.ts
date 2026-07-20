@@ -111,14 +111,17 @@ export async function POST(req: NextRequest) {
           email,
           full_name: email.split('@')[0],
           role: ADMIN_EMAILS.includes(email) ? 'admin' : 'user',
+          must_change_password: false,
         },
         { onConflict: 'id', ignoreDuplicates: true }
       )
-      // Si el email está en la lista de admins conocidos, se ajusta el rol
-      // (por si la fila ya existía con role='user').
-      if (ADMIN_EMAILS.includes(email)) {
-        await getSupabaseAdmin().from('profiles').update({ role: 'admin' }).eq('id', userId)
-      }
+      // Quien entra por SSO nunca pone contraseña local, así que el flag de
+      // "cambia tu contraseña provisional" no aplica. Se fuerza a false tanto
+      // si la fila la acaba de crear el trigger handle_new_user (con el
+      // default de la columna) como si ya existía de una prueba anterior.
+      const patch: Record<string, unknown> = { must_change_password: false }
+      if (ADMIN_EMAILS.includes(email)) patch.role = 'admin'
+      await getSupabaseAdmin().from('profiles').update(patch).eq('id', userId)
     }
 
     // 3) Generar un enlace mágico y canjearlo server-side para obtener tokens de sesión reales
