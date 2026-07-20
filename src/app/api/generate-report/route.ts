@@ -2,7 +2,17 @@ import { NextRequest, NextResponse } from 'next/server'
 import Groq from 'groq-sdk'
 import { EXPENSE_TYPE_LABELS } from '@/types'
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
+// Cliente perezoso: si se instancia al cargar el módulo, el build falla
+// (Next evalúa las rutas al recolectar page data, cuando aún no hay secretos).
+let _groq: Groq | null = null
+function getGroq(): Groq {
+  if (!_groq) {
+    const apiKey = process.env.GROQ_API_KEY
+    if (!apiKey) throw new Error('GROQ_API_KEY no está configurada')
+    _groq = new Groq({ apiKey })
+  }
+  return _groq
+}
 
 export async function POST(req: NextRequest) {
   const { project, expenses, profile } = await req.json()
@@ -22,7 +32,7 @@ export async function POST(req: NextRequest) {
 
   const total = expenses.reduce((s: number, e: any) => s + (e.amount ?? 0), 0)
 
-  const obs = await groq.chat.completions.create({
+  const obs = await getGroq().chat.completions.create({
     model: 'llama-3.3-70b-versatile',
     messages: [{
       role: 'user',

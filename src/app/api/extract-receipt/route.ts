@@ -1,7 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Groq from 'groq-sdk'
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
+// Cliente perezoso: si se instancia al cargar el módulo, el build falla
+// (Next evalúa las rutas al recolectar page data, cuando aún no hay secretos).
+let _groq: Groq | null = null
+function getGroq(): Groq {
+  if (!_groq) {
+    const apiKey = process.env.GROQ_API_KEY
+    if (!apiKey) throw new Error('GROQ_API_KEY no está configurada')
+    _groq = new Groq({ apiKey })
+  }
+  return _groq
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,7 +23,7 @@ export async function POST(request: NextRequest) {
     const base64 = Buffer.from(buffer).toString('base64')
     const mimeType = file.type as 'image/jpeg' | 'image/png' | 'image/webp'
 
-    const response = await groq.chat.completions.create({
+    const response = await getGroq().chat.completions.create({
       model: 'meta-llama/llama-4-scout-17b-16e-instruct',
       max_tokens: 512,
       messages: [
