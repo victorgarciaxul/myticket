@@ -10,7 +10,7 @@ import { EXPENSE_TYPE_LABELS } from '@/types'
 import { formatCO2 } from '@/lib/co2'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { PlusCircle, Receipt, Leaf, Car, Paperclip, AlertCircle, Trash2, FileText, ChevronLeft } from 'lucide-react'
+import { PlusCircle, Receipt, Leaf, Car, Paperclip, AlertCircle, Trash2, FileText, ChevronLeft, Pencil, Check, X } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { ReportModal } from './ReportModal'
 import { ReceiptLink } from '@/components/ReceiptLink'
@@ -25,6 +25,10 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const [submitting, setSubmitting] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [showReport, setShowReport] = useState(false)
+  const [editingName, setEditingName] = useState(false)
+  const [nameInput, setNameInput] = useState('')
+  const [savingName, setSavingName] = useState(false)
+  const [deletingProject, setDeletingProject] = useState(false)
 
   async function load() {
     const { data } = await supabase
@@ -63,6 +67,28 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     load()
   }
 
+  function startEditName() {
+    setNameInput(project.name)
+    setEditingName(true)
+  }
+
+  async function saveName() {
+    const trimmed = nameInput.trim()
+    if (!trimmed || trimmed === project.name) { setEditingName(false); return }
+    setSavingName(true)
+    await supabase.from('projects').update({ name: trimmed }).eq('id', id)
+    setSavingName(false)
+    setEditingName(false)
+    load()
+  }
+
+  async function handleDeleteProject() {
+    if (!confirm(`¿Eliminar el proyecto "${project.name}" y todos sus gastos? Esta acción no se puede deshacer.`)) return
+    setDeletingProject(true)
+    await supabase.from('projects').delete().eq('id', id)
+    router.push('/projects')
+  }
+
   if (loading || !project) return (
     <div className="flex items-center justify-center min-h-[60vh]">
       <div className="w-8 h-8 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
@@ -86,10 +112,42 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
       {/* Header */}
       <div className="flex items-start justify-between mb-8 gap-4">
-        <div>
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-3 mb-2">
-            <h1 className="text-2xl font-bold text-gray-900">{project.name}</h1>
-            <StatusBadge status={project.status} />
+            {editingName ? (
+              <div className="flex items-center gap-1.5 flex-1">
+                <input autoFocus value={nameInput} onChange={e => setNameInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') setEditingName(false) }}
+                  className="text-2xl font-bold text-gray-900 border border-indigo-300 rounded-lg px-2 py-0.5 focus:outline-none focus:ring-2 focus:ring-indigo-500 min-w-0 flex-1" />
+                <button onClick={saveName} disabled={savingName}
+                  className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-50 flex-shrink-0">
+                  <Check className="h-4 w-4" />
+                </button>
+                <button onClick={() => setEditingName(false)} disabled={savingName}
+                  className="p-1.5 text-gray-400 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            ) : (
+              <>
+                <h1 className="text-2xl font-bold text-gray-900 truncate">{project.name}</h1>
+                <StatusBadge status={project.status} />
+                {isDraft && isOwner && (
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <button onClick={startEditName}
+                      className="p-1.5 text-gray-300 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                      title="Editar nombre">
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button onClick={handleDeleteProject} disabled={deletingProject}
+                      className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                      title="Eliminar proyecto">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
           </div>
           {project.description && <p className="text-sm text-gray-500 mb-1">{project.description}</p>}
           <p className="text-xs text-gray-400">
