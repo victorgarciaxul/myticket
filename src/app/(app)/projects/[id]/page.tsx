@@ -13,6 +13,7 @@ import { es } from 'date-fns/locale'
 import { PlusCircle, Receipt, Leaf, Car, Paperclip, AlertCircle, Trash2, FileText, ChevronLeft, Pencil, Check, X } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { ReportModal } from './ReportModal'
+import { EditExpenseModal } from './EditExpenseModal'
 import { ReceiptLink } from '@/components/ReceiptLink'
 
 export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -29,6 +30,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const [nameInput, setNameInput] = useState('')
   const [savingName, setSavingName] = useState(false)
   const [deletingProject, setDeletingProject] = useState(false)
+  const [editingExpense, setEditingExpense] = useState<any>(null)
 
   async function load() {
     const { data } = await supabase
@@ -276,10 +278,17 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                       {e.amount ? `${Number(e.amount).toFixed(2)} €` : e.km ? `${e.km} km` : '—'}
                     </p>
                     {isDraft && isOwner && (
-                      <button onClick={() => handleDelete(e.id)} disabled={deletingId === e.id}
-                        className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50">
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      <>
+                        <button onClick={() => setEditingExpense(e)}
+                          className="p-1.5 text-gray-300 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                          title="Editar gasto">
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                        <button onClick={() => handleDelete(e.id)} disabled={deletingId === e.id}
+                          className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -299,6 +308,14 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           expenses={expenses}
           profile={profile}
           onClose={() => setShowReport(false)}
+        />
+      )}
+
+      {editingExpense && (
+        <EditExpenseModal
+          expense={editingExpense}
+          onClose={() => setEditingExpense(null)}
+          onSaved={() => { setEditingExpense(null); load() }}
         />
       )}
     </div>
